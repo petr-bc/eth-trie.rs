@@ -365,11 +365,7 @@ where
                 err_key: Some(key.to_vec()),
             })
         } else {
-            let mut path = result?;
-            match self.root {
-                Node::Empty => {}
-                _ => path.push(self.root.clone()),
-            }
+            let path = result?;
             Ok(path
                 .into_iter()
                 .rev()
@@ -719,7 +715,10 @@ where
     ) -> TrieResult<Vec<Node>> {
         let partial = &path.offset(path_index);
         match source_node {
-            Node::Empty | Node::Leaf(_) => Ok(vec![]),
+            Node::Empty => Ok(vec![]),
+            Node::Leaf(node) => {
+                Ok(vec![Node::Leaf(node.clone())])
+            },
             Node::Branch(branch) => {
                 let borrow_branch = branch.read().unwrap();
 
@@ -727,7 +726,9 @@ where
                     Ok(vec![])
                 } else {
                     let node = &borrow_branch.children[partial.at(0)];
-                    self.get_path_at(node, path, path_index + 1)
+                    let mut rest = self.get_path_at(node, path, path_index + 1)?;
+                    rest.push(Node::Branch(branch.clone()));
+                    Ok(rest)
                 }
             }
             Node::Extension(ext) => {
@@ -737,7 +738,9 @@ where
                 let match_len = partial.common_prefix(prefix);
 
                 if match_len == prefix.len() {
-                    self.get_path_at(&borrow_ext.node, path, path_index + match_len)
+                    let mut rest = self.get_path_at(&borrow_ext.node, path, path_index + match_len)?;
+                    rest.push(Node::Extension(ext.clone()));
+                    Ok(rest)
                 } else {
                     Ok(vec![])
                 }
